@@ -9,24 +9,24 @@
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
   :root {
-    --bg: #0d0f12;
-    --bg2: #13161b;
-    --bg3: #1a1e25;
-    --bg4: #22272f;
-    --border: #2a303a;
-    --text: #e2e8f0;
-    --text2: #8892a0;
-    --text3: #4a5568;
-    --accent: #3b82f6;
-    --accent2: #10b981;
-    --warn: #f59e0b;
-    --danger: #ef4444;
-    --success: #10b981;
-    --BA: #3b82f6;
-    --CS-goat: #10b981;
-    --CS-never: #f59e0b;
-    --QA-gun: #8b5cf6;
-    --QA-wolf: #ec4899;
+    --bg: #111318;
+    --bg2: #181c23;
+    --bg3: #1f2430;
+    --bg4: #272d3a;
+    --border: #2e3545;
+    --text: #f0f4fa;
+    --text2: #b0bcd0;
+    --text3: #6b7a94;
+    --accent: #5b9bff;
+    --accent2: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --success: #34d399;
+    --BA: #5b9bff;
+    --CS-goat: #34d399;
+    --CS-never: #fbbf24;
+    --QA-gun: #a78bfa;
+    --QA-wolf: #f472b6;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -63,8 +63,35 @@
   .last-updated {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    color: var(--text3);
+    color: var(--text2);
   }
+  .storage-indicator {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg3);
+  }
+  .storage-bar-wrap {
+    width: 56px;
+    height: 4px;
+    background: var(--bg4);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .storage-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease, background 0.4s ease;
+    background: var(--success);
+  }
+  .storage-bar.warn { background: var(--warn); }
+  .storage-bar.danger { background: var(--danger); }
   .header-right { display: flex; align-items: center; gap: 10px; }
   .btn {
     font-family: 'IBM Plex Mono', monospace;
@@ -172,7 +199,7 @@
     font-family: 'IBM Plex Mono', monospace;
     font-size: 10px;
     font-weight: 500;
-    color: var(--text3);
+    color: var(--text2);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 6px;
@@ -198,7 +225,7 @@
     margin-bottom: 16px;
     flex-wrap: wrap;
   }
-  .filter-label { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  .filter-label { font-size: 11px; color: var(--text2); font-family: 'IBM Plex Mono', monospace; }
   select {
     background: var(--bg2);
     border: 1px solid var(--border);
@@ -221,7 +248,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--text3);
+    color: var(--text2);
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     text-align: left;
@@ -229,7 +256,7 @@
     cursor: pointer;
     user-select: none;
   }
-  thead th:hover { color: var(--text2); }
+  thead th:hover { color: var(--text); }
   thead th.sort-asc::after { content: ' ↑'; color: var(--accent); }
   thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
   td {
@@ -297,8 +324,7 @@
     letter-spacing: 0.5px;
     color: var(--text2);
     margin-bottom: 14px;
-  }
-  .chart-wrap { position: relative; height: 260px; }
+  }  .chart-wrap { position: relative; height: 260px; }
   .chart-wrap.tall { height: 320px; }
 
   /* ── PERSON DRILL-DOWN ── */
@@ -370,6 +396,10 @@
     <div class="last-updated" id="lastUpdated">no data loaded</div>
   </div>
   <div class="header-right">
+    <div class="storage-indicator" title="localStorage usage">
+      <div class="storage-bar-wrap"><div class="storage-bar" id="storageBar"></div></div>
+      <span id="storageLabel">0 KB</span>
+    </div>
     <button class="btn btn-danger" onclick="clearData()">Clear All Data</button>
     <button class="btn btn-primary" onclick="openPasteModal()">+ Paste Morning Data</button>
   </div>
@@ -619,6 +649,7 @@ function initUI() {
   renderSummary();
   renderTrends();
   if (personSel.value) renderPerson();
+  updateStorageIndicator();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -794,10 +825,10 @@ function renderTrends() {
 
   const chartDefaults = {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { color: '#8892a0', boxWidth: 10, font: { size: 10, family: "'IBM Plex Mono'" }, padding: 8 } } },
+    plugins: { legend: { position: 'bottom', labels: { color: '#b0bcd0', boxWidth: 10, font: { size: 10, family: "'IBM Plex Mono'" }, padding: 8 } } },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } },
-      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } }
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } } }
     }
   };
 
@@ -935,8 +966,8 @@ function renderPerson() {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } },
-      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } }, beginAtZero: true }
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } }, beginAtZero: true }
     },
     elements: { line: { tension: 0.3 }, point: { radius: 3, hoverRadius: 5 } }
   };
@@ -972,6 +1003,28 @@ function switchTab(tab) {
   document.getElementById(`tab-${tab}`).classList.add('active');
   if (tab==='trends') renderTrends();
   if (tab==='person') renderPerson();
+}
+
+function updateStorageIndicator() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || '';
+    const bytes = new Blob([raw]).size;
+    const kb = bytes / 1024;
+    const mb = kb / 1024;
+    // localStorage limit is ~5MB per origin
+    const limitKB = 5 * 1024;
+    const pct = Math.min((kb / limitKB) * 100, 100);
+
+    const label = kb < 1 ? `${bytes} B` : kb < 1024 ? `${kb.toFixed(1)} KB` : `${mb.toFixed(2)} MB`;
+    document.getElementById('storageLabel').textContent = label;
+
+    const bar = document.getElementById('storageBar');
+    bar.style.width = `${pct}%`;
+    bar.className = 'storage-bar' + (pct > 80 ? ' danger' : pct > 50 ? ' warn' : '');
+
+    const ind = bar.closest('.storage-indicator');
+    ind.title = `${label} used of ~5 MB localStorage (${pct.toFixed(1)}%)`;
+  } catch(e) {}
 }
 
 // ══════════════════════════════════════════════════════════════════
