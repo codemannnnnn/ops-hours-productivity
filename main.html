@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ops Productivity Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1a1e25;
+    --bg4: #22272f;
+    --border: #2a303a;
+    --text: #e2e8f0;
+    --text2: #8892a0;
+    --text3: #4a5568;
+    --accent: #3b82f6;
+    --accent2: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --success: #10b981;
+    --BA: #3b82f6;
+    --CS-goat: #10b981;
+    --CS-never: #f59e0b;
+    --QA-gun: #8b5cf6;
+    --QA-wolf: #ec4899;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 13px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+  .logo span { color: var(--accent); }
+  .last-updated {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--bg3);
+    color: var(--text2);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: #2563eb; color: white; }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: white; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 10px 18px;
+    cursor: pointer;
+    color: var(--text3);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── MAIN ── */
+  .main { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+  /* ── PASTE MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 700px;
+    max-width: 95vw;
+    padding: 24px;
+  }
+  .modal h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .modal p { color: var(--text2); font-size: 12px; margin-bottom: 16px; line-height: 1.6; }
+  .modal textarea {
+    width: 100%;
+    height: 240px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+  }
+  .modal textarea:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .parse-status { font-size: 11px; color: var(--text2); margin-top: 8px; font-family: 'IBM Plex Mono', monospace; }
+  .parse-status.ok { color: var(--success); }
+  .parse-status.err { color: var(--danger); }
+
+  /* ── METRICS ROW ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .metric-card .m-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .metric-card .m-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+  }
+  .metric-card .m-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  /* ── FILTERS ── */
+  .filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-label { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  select {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* ── SUMMARY TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text3);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { color: var(--text2); }
+  thead th.sort-asc::after { content: ' ↑'; color: var(--accent); }
+  thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(42,48,58,0.5);
+    color: var(--text);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  tr:hover td { background: rgba(59,130,246,0.04); }
+  .group-header td {
+    background: var(--bg3);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    padding: 10px 10px 6px;
+    border-top: 1px solid var(--border);
+  }
+  .role-divider td {
+    background: rgba(255,255,255,0.02);
+    font-size: 10px;
+    color: var(--text3);
+    padding: 4px 10px 4px 22px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+  .badge-high { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+  .badge-mid { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+  .badge-low { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+  .trend-up { color: var(--success); font-weight: 600; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .trend-dn { color: var(--danger); font-weight: 600; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .trend-flat { color: var(--text3); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .copy-btn-wrap { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
+  /* ── CHARTS TAB ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    margin-bottom: 14px;
+  }
+  .chart-wrap { position: relative; height: 260px; }
+  .chart-wrap.tall { height: 320px; }
+
+  /* ── PERSON DRILL-DOWN ── */
+  .person-select-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .person-charts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 1000px) { .person-charts { grid-template-columns: 1fr; } }
+
+  /* ── EMPTY / NO DATA ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+  }
+  .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state h3 { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text2); margin-bottom: 8px; }
+  .empty-state p { font-size: 12px; line-height: 1.7; }
+
+  .section-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text3);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    color: var(--text3);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .pill:hover { color: var(--text2); border-color: var(--text3); }
+  .pill.active { color: white; border-color: transparent; }
+</style>
+</head>
+<body>
+
+<!-- PASTE MODAL -->
+<div class="modal-overlay" id="pasteModal">
+  <div class="modal">
+    <h2>Paste Morning Data</h2>
+    <p>Copy all rows from your SSRS export (including the header row) and paste below. Data will be stored in the browser and merged with existing history.</p>
+    <textarea id="pasteArea" placeholder="Team	CFCAIdentifier	LogOnName	DateBeginning	DateEnding	HoursWorked	TotalEarnedIncentiveRealtime	AvgEarnedIncentiveThreeMonth	QualityMonth	Regressions
+..."></textarea>
+    <div class="parse-status" id="parseStatus"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePasteModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="importData()">Import & Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">ops<span>.</span>dashboard</div>
+    <div class="last-updated" id="lastUpdated">no data loaded</div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-danger" onclick="clearData()">Clear All Data</button>
+    <button class="btn btn-primary" onclick="openPasteModal()">+ Paste Morning Data</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" data-tab="summary" onclick="switchTab('summary')">Summary</div>
+  <div class="tab" data-tab="trends" onclick="switchTab('trends')">Team Trends</div>
+  <div class="tab" data-tab="person" onclick="switchTab('person')">Individual</div>
+</div>
+
+<div class="main">
+
+  <!-- ── SUMMARY TAB ── -->
+  <div class="tab-content active" id="tab-summary">
+    <div class="metrics-row" id="metricsRow"></div>
+    <div class="filters">
+      <span class="filter-label">Team:</span>
+      <select id="teamFilter" onchange="renderSummary()"><option value="">All teams</option></select>
+      <span class="filter-label">Role:</span>
+      <select id="roleFilter" onchange="renderSummary()">
+        <option value="">All roles</option>
+        <option value="Business Analyst">BA</option>
+        <option value="Configuration Specialist">CS</option>
+        <option value="Quality Assurance Specialist">QA</option>
+      </select>
+      <div style="margin-left:auto;">
+        <button class="btn" onclick="copyTable()">Copy to Excel</button>
+      </div>
+    </div>
+    <div id="summaryContent"></div>
+  </div>
+
+  <!-- ── TRENDS TAB ── -->
+  <div class="tab-content" id="tab-trends">
+    <div class="filters">
+      <span class="filter-label">Team:</span>
+      <select id="trendTeamFilter" onchange="renderTrends()"><option value="">All teams</option></select>
+      <span class="filter-label">Role:</span>
+      <select id="trendRoleFilter" onchange="renderTrends()">
+        <option value="">All roles</option>
+        <option value="Business Analyst">BA</option>
+        <option value="Configuration Specialist">CS</option>
+        <option value="Quality Assurance Specialist">QA</option>
+      </select>
+    </div>
+    <div id="trendsContent"></div>
+  </div>
+
+  <!-- ── INDIVIDUAL TAB ── -->
+  <div class="tab-content" id="tab-person">
+    <div class="person-select-row">
+      <span class="filter-label">Person:</span>
+      <select id="personSelect" onchange="renderPerson()"><option value="">— select —</option></select>
+    </div>
+    <div id="personContent"></div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STORAGE
+// ══════════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'ops_dashboard_v2';
+
+function loadStore() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { rows: [], lastUpdated: null }; }
+  catch { return { rows: [], lastUpdated: null }; }
+}
+
+function saveStore(store) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PARSE TSV
+// ══════════════════════════════════════════════════════════════════
+function parseTSV(text) {
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  // Skip header if present
+  const first = lines[0].toLowerCase();
+  const start = first.includes('team') || first.includes('logonname') ? 1 : 0;
+  const parsed = [];
+  for (let i = start; i < lines.length; i++) {
+    const cols = lines[i].split('\t');
+    if (cols.length < 9) continue;
+    const dateStr = cols[3].trim().split(' ')[0]; // take date part only
+    parsed.push({
+      team: cols[0].trim(),
+      role: cols[1].trim(),
+      name: cols[2].trim(),
+      weekStart: dateStr,
+      hours: parseFloat(cols[5]) || 0,
+      throughput: parseFloat(cols[6]) || 0,
+      qtr: parseFloat(cols[7]) || 0,
+      quality: parseFloat(cols[8]) || 0,
+      regressions: parseFloat(cols[9]) || 0,
+    });
+  }
+  return parsed;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// IMPORT
+// ══════════════════════════════════════════════════════════════════
+function openPasteModal() { document.getElementById('pasteModal').classList.add('open'); }
+function closePasteModal() { document.getElementById('pasteModal').classList.remove('open'); document.getElementById('pasteArea').value = ''; document.getElementById('parseStatus').textContent = ''; }
+
+function importData() {
+  const text = document.getElementById('pasteArea').value;
+  const newRows = parseTSV(text);
+  if (!newRows.length) {
+    document.getElementById('parseStatus').textContent = '✗ Could not parse data — check format';
+    document.getElementById('parseStatus').className = 'parse-status err';
+    return;
+  }
+
+  const store = loadStore();
+  // Build a set of existing keys to avoid duplicates
+  const existingKeys = new Set(store.rows.map(r => `${r.name}|${r.role}|${r.team}|${r.weekStart}`));
+  let added = 0, updated = 0;
+
+  newRows.forEach(r => {
+    const key = `${r.name}|${r.role}|${r.team}|${r.weekStart}`;
+    if (existingKeys.has(key)) {
+      // Update existing row (data may have changed intra-day)
+      const idx = store.rows.findIndex(x => `${x.name}|${x.role}|${x.team}|${x.weekStart}` === key);
+      if (idx !== -1) { store.rows[idx] = r; updated++; }
+    } else {
+      store.rows.push(r);
+      added++;
+    }
+  });
+
+  store.lastUpdated = new Date().toISOString();
+  saveStore(store);
+
+  document.getElementById('parseStatus').textContent = `✓ ${added} new rows added, ${updated} updated`;
+  document.getElementById('parseStatus').className = 'parse-status ok';
+
+  setTimeout(() => { closePasteModal(); initUI(); }, 900);
+}
+
+function clearData() {
+  if (!confirm('Clear all stored data? This cannot be undone.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  initUI();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DATA HELPERS
+// ══════════════════════════════════════════════════════════════════
+const ROLE_ORDER = ['Business Analyst','Configuration Specialist','Quality Assurance Specialist'];
+const ROLE_SHORT = { 'Business Analyst':'BA', 'Configuration Specialist':'CS', 'Quality Assurance Specialist':'QA' };
+
+const TEAM_COLORS = {
+  'Business Analysis - Team Wynn': '#3b82f6',
+  'Configuration - Team Goat': '#10b981',
+  'Configuration - Team Never Laughs': '#f59e0b',
+  'Quality Assurance - Team Gunsight': '#8b5cf6',
+  'Quality Assurance - Team Mad Wolf': '#ec4899',
+};
+
+function getColor(team) { return TEAM_COLORS[team] || '#60a5fa'; }
+
+function getRows() { return loadStore().rows; }
+
+function getWeeksSorted(rows) {
+  return [...new Set(rows.map(r => r.weekStart))].sort();
+}
+
+function getPeople(rows) {
+  const seen = new Set(), out = [];
+  rows.forEach(r => {
+    const k = `${r.name}|${r.role}|${r.team}`;
+    if (!seen.has(k)) { seen.add(k); out.push({ name: r.name, role: r.role, team: r.team }); }
+  });
+  return out;
+}
+
+function getPersonRows(rows, name, role, team) {
+  return rows.filter(r => r.name===name && r.role===role && r.team===team).sort((a,b) => a.weekStart.localeCompare(b.weekStart));
+}
+
+function getLatestRow(rows, name, role, team) {
+  const pr = getPersonRows(rows, name, role, team);
+  return pr.length ? pr[pr.length - 1] : null;
+}
+
+function getFullWeeks(rows, name, role, team) {
+  return getPersonRows(rows, name, role, team).filter(r => r.hours > 5);
+}
+
+function avgHrs(rows, name, role, team, n) {
+  const fw = getFullWeeks(rows, name, role, team).slice(-n);
+  if (!fw.length) return null;
+  return fw.reduce((s,r) => s+r.hours,0)/fw.length;
+}
+
+function fmtWeek(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT UI
+// ══════════════════════════════════════════════════════════════════
+function initUI() {
+  const store = loadStore();
+  const rows = store.rows;
+
+  // Last updated
+  const lu = document.getElementById('lastUpdated');
+  if (store.lastUpdated) {
+    const d = new Date(store.lastUpdated);
+    lu.textContent = `updated ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} — ${rows.length} records`;
+  } else {
+    lu.textContent = 'no data loaded';
+  }
+
+  // Populate team filters
+  const teams = [...new Set(rows.map(r => r.team))].sort();
+  ['teamFilter','trendTeamFilter'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All teams</option>';
+    teams.forEach(t => { const o = document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+    sel.value = cur;
+  });
+
+  // Populate person select
+  const personSel = document.getElementById('personSelect');
+  const curP = personSel.value;
+  personSel.innerHTML = '<option value="">— select —</option>';
+  const people = getPeople(rows).sort((a,b) => a.name.localeCompare(b.name));
+  people.forEach(p => {
+    const o = document.createElement('option');
+    o.value = `${p.name}|${p.role}|${p.team}`;
+    o.textContent = `${p.name} (${ROLE_SHORT[p.role]} — ${p.team.replace('Business Analysis - ','').replace('Configuration - ','').replace('Quality Assurance - ','')})`;
+    personSel.appendChild(o);
+  });
+  if (curP) personSel.value = curP;
+
+  renderSummary();
+  renderTrends();
+  if (personSel.value) renderPerson();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SUMMARY TAB
+// ══════════════════════════════════════════════════════════════════
+let exportData = [];
+let sortCol = 'qtr', sortDir = 'desc';
+
+function renderSummary() {
+  const rows = getRows();
+  if (!rows.length) {
+    document.getElementById('summaryContent').innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><h3>No data yet</h3><p>Click "Paste Morning Data" to load your first dataset.</p></div>`;
+    document.getElementById('metricsRow').innerHTML = '';
+    return;
+  }
+
+  const teamF = document.getElementById('teamFilter').value;
+  const roleF = document.getElementById('roleFilter').value;
+
+  const people = getPeople(rows).filter(p => (!teamF || p.team===teamF) && (!roleF || p.role===roleF));
+  const latestRows = people.map(p => { const lr = getLatestRow(rows, p.name, p.role, p.team); return lr ? {...p, lr} : null; }).filter(Boolean);
+
+  // Metrics
+  const totalHrs = latestRows.reduce((s,p) => s+p.lr.hours, 0);
+  const avgThr = latestRows.length ? (latestRows.reduce((s,p) => s+p.lr.throughput, 0)/latestRows.length) : 0;
+  const avgQtr = latestRows.length ? (latestRows.reduce((s,p) => s+p.lr.qtr, 0)/latestRows.length) : 0;
+  const totalReg = latestRows.reduce((s,p) => s+p.lr.regressions, 0);
+
+  document.getElementById('metricsRow').innerHTML = `
+    <div class="metric-card"><div class="m-label">People</div><div class="m-value">${latestRows.length}</div><div class="m-sub">current week</div></div>
+    <div class="metric-card"><div class="m-label">Total Hours</div><div class="m-value">${totalHrs.toFixed(0)}</div><div class="m-sub">current week</div></div>
+    <div class="metric-card"><div class="m-label">Avg Throughput</div><div class="m-value">${avgThr.toFixed(1)}</div><div class="m-sub">TotalEarnedIncentiveRealtime</div></div>
+    <div class="metric-card"><div class="m-label">Avg 3-Mo Prod</div><div class="m-value">${avgQtr.toFixed(1)}</div><div class="m-sub">AvgEarnedIncentiveThreeMonth</div></div>
+    <div class="metric-card"><div class="m-label">Regressions</div><div class="m-value">${totalReg}</div><div class="m-sub">current week</div></div>
+  `;
+
+  // Build grouped, sorted table
+  const teams = [...new Set(people.map(p=>p.team))].sort();
+  exportData = [];
+
+  let html = `<div class="table-wrap"><table id="summaryTable">
+    <thead><tr>
+      <th onclick="sortBy('name')">Person</th>
+      <th>Team</th>
+      <th>Role</th>
+      <th onclick="sortBy('hours')">Hrs (cur)</th>
+      <th onclick="sortBy('avg4')">Avg 4wk hrs</th>
+      <th onclick="sortBy('avg14')">Avg 14wk hrs</th>
+      <th onclick="sortBy('throughput')">Wkly Throughput</th>
+      <th onclick="sortBy('qtr')">3-Mo Avg Prod</th>
+      <th onclick="sortBy('regressions')">Regressions</th>
+      <th>Trend</th>
+    </tr></thead><tbody>`;
+
+  teams.forEach(team => {
+    const color = getColor(team);
+    let firstInTeam = true;
+    ROLE_ORDER.forEach(role => {
+      const members = latestRows.filter(p => p.team===team && p.role===role);
+      if (!members.length) return;
+
+      // Sort within role group
+      members.sort((a,b) => {
+        let va, vb;
+        if (sortCol==='name') { va=a.name; vb=b.name; }
+        else if (sortCol==='avg4') { va=avgHrs(rows,a.name,a.role,a.team,4)||0; vb=avgHrs(rows,b.name,b.role,b.team,4)||0; }
+        else if (sortCol==='avg14') { va=avgHrs(rows,a.name,a.role,a.team,14)||0; vb=avgHrs(rows,b.name,b.role,b.team,14)||0; }
+        else { va=a.lr[sortCol]||0; vb=b.lr[sortCol]||0; }
+        if (sortDir==='asc') return va>vb?1:va<vb?-1:0;
+        return va<vb?1:va>vb?-1:0;
+      });
+
+      if (firstInTeam) {
+        html += `<tr class="group-header"><td colspan="10" style="border-left:3px solid ${color};padding-left:12px;">${team}</td></tr>`;
+        firstInTeam = false;
+      }
+      html += `<tr class="role-divider"><td colspan="10">${ROLE_SHORT[role]} — ${role}</td></tr>`;
+
+      members.forEach(p => {
+        const lr = p.lr;
+        const fw = getFullWeeks(rows, p.name, p.role, p.team);
+        const prev = fw.length >= 2 ? fw[fw.length-2] : null;
+        const trend = prev ? lr.throughput - prev.throughput : null;
+        const a4 = avgHrs(rows, p.name, p.role, p.team, 4);
+        const a14 = avgHrs(rows, p.name, p.role, p.team, 14);
+        const qBadge = lr.qtr>=30?'badge-high':lr.qtr>=15?'badge-mid':'badge-low';
+        const regBadge = lr.regressions>=8?'badge-low':lr.regressions>=4?'badge-mid':'badge-high';
+        let trendHtml = `<span class="trend-flat">—</span>`;
+        if (trend !== null) {
+          if (trend > 2) trendHtml = `<span class="trend-up">▲${trend.toFixed(1)}</span>`;
+          else if (trend < -2) trendHtml = `<span class="trend-dn">▼${Math.abs(trend).toFixed(1)}</span>`;
+        }
+
+        exportData.push({
+          Team: team, Role: role, Person: p.name,
+          'Hrs (cur)': lr.hours.toFixed(1),
+          'Avg 4wk hrs': a4!=null?a4.toFixed(1):'',
+          'Avg 14wk hrs': a14!=null?a14.toFixed(1):'',
+          'Wkly Throughput': lr.throughput.toFixed(1),
+          '3-Mo Avg Prod': lr.qtr.toFixed(1),
+          'Regressions': lr.regressions,
+          'Trend': trend!=null?(trend>2?'+'+trend.toFixed(1):trend<-2?'-'+Math.abs(trend).toFixed(1):'—'):'—'
+        });
+
+        html += `<tr>
+          <td style="padding-left:20px;font-weight:500">${p.name}</td>
+          <td style="color:var(--text3);font-size:11px"></td>
+          <td style="color:var(--text3);font-size:11px;font-family:'IBM Plex Mono',monospace">${ROLE_SHORT[role]}</td>
+          <td style="font-family:'IBM Plex Mono',monospace">${lr.hours.toFixed(1)}</td>
+          <td style="font-family:'IBM Plex Mono',monospace">${a4!=null?a4.toFixed(1):'—'}</td>
+          <td style="font-family:'IBM Plex Mono',monospace">${a14!=null?a14.toFixed(1):'—'}</td>
+          <td style="font-family:'IBM Plex Mono',monospace">${lr.throughput.toFixed(1)}</td>
+          <td><span class="badge ${qBadge}">${lr.qtr.toFixed(1)}</span></td>
+          <td><span class="badge ${regBadge}">${lr.regressions}</span></td>
+          <td>${trendHtml}</td>
+        </tr>`;
+      });
+    });
+  });
+
+  html += '</tbody></table></div>';
+  document.getElementById('summaryContent').innerHTML = html;
+
+  // Update sort indicators
+  document.querySelectorAll('#summaryTable thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+  });
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir = sortDir==='desc'?'asc':'desc';
+  else { sortCol=col; sortDir='desc'; }
+  renderSummary();
+}
+
+function copyTable() {
+  if (!exportData.length) return;
+  const hdrs = Object.keys(exportData[0]);
+  const tsv = [hdrs.join('\t'), ...exportData.map(r => hdrs.map(h=>r[h]).join('\t'))].join('\n');
+  navigator.clipboard.writeText(tsv).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = tsv; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  });
+  const btn = event.target;
+  const orig = btn.textContent; btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TRENDS TAB
+// ══════════════════════════════════════════════════════════════════
+let trendCharts = {};
+
+function destroyTrendCharts() {
+  Object.values(trendCharts).forEach(c => c.destroy());
+  trendCharts = {};
+}
+
+function renderTrends() {
+  destroyTrendCharts();
+  const rows = getRows();
+  if (!rows.length) {
+    document.getElementById('trendsContent').innerHTML = `<div class="empty-state"><div class="empty-icon">📈</div><h3>No data yet</h3><p>Paste your morning data to see trends.</p></div>`;
+    return;
+  }
+
+  const teamF = document.getElementById('trendTeamFilter').value;
+  const roleF = document.getElementById('trendRoleFilter').value;
+  const people = getPeople(rows).filter(p => (!teamF||p.team===teamF) && (!roleF||p.role===roleF));
+  const weeks = getWeeksSorted(rows);
+  const weekLabels = weeks.map(fmtWeek);
+
+  const chartDefaults = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { color: '#8892a0', boxWidth: 10, font: { size: 10, family: "'IBM Plex Mono'" }, padding: 8 } } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } }
+    }
+  };
+
+  // Color palette per person
+  const palette = ['#3b82f6','#10b981','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f97316','#84cc16','#a78bfa','#fb7185','#34d399','#fbbf24'];
+  
+  function personColor(i) { return palette[i % palette.length]; }
+
+  // Build datasets for each metric
+  function buildDatasets(metric) {
+    return people.map((p, i) => {
+      const color = personColor(i);
+      const data = weeks.map(w => {
+        const r = rows.find(x => x.name===p.name && x.role===p.role && x.team===p.team && x.weekStart===w);
+        return r ? r[metric] : null;
+      });
+      return {
+        label: p.name,
+        data,
+        borderColor: color,
+        backgroundColor: color + '22',
+        borderWidth: 1.5,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        fill: false,
+        tension: 0.3,
+        spanGaps: true
+      };
+    });
+  }
+
+  // Team avg line
+  function buildTeamAvgDataset(metric, label, color) {
+    const data = weeks.map(w => {
+      const weekRows = rows.filter(r => (!teamF||r.team===teamF) && (!roleF||r.role===roleF) && r.weekStart===w && r.hours>5);
+      if (!weekRows.length) return null;
+      return weekRows.reduce((s,r) => s+r[metric], 0) / weekRows.length;
+    });
+    return { label, data, borderColor: color, backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [4,3], pointRadius: 2, fill: false, tension: 0.3, spanGaps: true };
+  }
+
+  document.getElementById('trendsContent').innerHTML = `
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-title">Hours Worked — per person per week</div>
+        <div class="chart-wrap tall"><canvas id="hoursChart"></canvas></div>
+      </div>
+      <div class="chart-card wide">
+        <div class="chart-title">Weekly Throughput (TotalEarnedIncentiveRealtime)</div>
+        <div class="chart-wrap tall"><canvas id="throughputChart"></canvas></div>
+      </div>
+      <div class="chart-card wide">
+        <div class="chart-title">3-Month Avg Productivity (AvgEarnedIncentiveThreeMonth)</div>
+        <div class="chart-wrap tall"><canvas id="qtrChart"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  const hoursDatasets = buildDatasets('hours');
+  hoursDatasets.push(buildTeamAvgDataset('hours', '── Team Avg', '#ffffff'));
+  trendCharts.hours = new Chart(document.getElementById('hoursChart'), {
+    type: 'line',
+    data: { labels: weekLabels, datasets: hoursDatasets },
+    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins } }
+  });
+
+  const thrDatasets = buildDatasets('throughput');
+  thrDatasets.push(buildTeamAvgDataset('throughput', '── Team Avg', '#ffffff'));
+  trendCharts.throughput = new Chart(document.getElementById('throughputChart'), {
+    type: 'line',
+    data: { labels: weekLabels, datasets: thrDatasets },
+    options: { ...chartDefaults }
+  });
+
+  const qtrDatasets = buildDatasets('qtr');
+  qtrDatasets.push(buildTeamAvgDataset('qtr', '── Team Avg', '#ffffff'));
+  trendCharts.qtr = new Chart(document.getElementById('qtrChart'), {
+    type: 'line',
+    data: { labels: weekLabels, datasets: qtrDatasets },
+    options: { ...chartDefaults }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INDIVIDUAL TAB
+// ══════════════════════════════════════════════════════════════════
+let personCharts = {};
+
+function destroyPersonCharts() {
+  Object.values(personCharts).forEach(c => c.destroy());
+  personCharts = {};
+}
+
+function renderPerson() {
+  destroyPersonCharts();
+  const val = document.getElementById('personSelect').value;
+  if (!val) { document.getElementById('personContent').innerHTML = ''; return; }
+
+  const [name, role, team] = val.split('|');
+  const rows = getRows();
+  const pRows = getPersonRows(rows, name, role, team);
+
+  if (!pRows.length) { document.getElementById('personContent').innerHTML = '<div class="empty-state"><p>No data for this person.</p></div>'; return; }
+
+  const labels = pRows.map(r => fmtWeek(r.weekStart));
+  const color = getColor(team);
+
+  // Summary stats
+  const fullWks = pRows.filter(r => r.hours > 5);
+  const latestR = pRows[pRows.length-1];
+  const avg4 = fullWks.slice(-4);
+  const avgH4 = avg4.length ? (avg4.reduce((s,r)=>s+r.hours,0)/avg4.length).toFixed(1) : '—';
+  const avgH14 = fullWks.length ? (fullWks.reduce((s,r)=>s+r.hours,0)/fullWks.length).toFixed(1) : '—';
+  const totalReg = pRows.reduce((s,r)=>s+r.regressions,0);
+  const shortTeam = team.replace('Business Analysis - ','').replace('Configuration - ','').replace('Quality Assurance - ','');
+
+  document.getElementById('personContent').innerHTML = `
+    <div class="metrics-row" style="margin-bottom:16px;">
+      <div class="metric-card"><div class="m-label">Current hrs</div><div class="m-value">${latestR.hours.toFixed(1)}</div><div class="m-sub">${fmtWeek(latestR.weekStart)} week</div></div>
+      <div class="metric-card"><div class="m-label">Avg hrs (4wk)</div><div class="m-value">${avgH4}</div><div class="m-sub">full weeks only</div></div>
+      <div class="metric-card"><div class="m-label">Avg hrs (all)</div><div class="m-value">${avgH14}</div><div class="m-sub">${fullWks.length} full weeks</div></div>
+      <div class="metric-card"><div class="m-label">Latest throughput</div><div class="m-value">${latestR.throughput.toFixed(1)}</div><div class="m-sub">TotalEarnedIncentiveRealtime</div></div>
+      <div class="metric-card"><div class="m-label">3-mo avg prod</div><div class="m-value">${latestR.qtr.toFixed(1)}</div><div class="m-sub">AvgEarnedIncentiveThreeMonth</div></div>
+      <div class="metric-card"><div class="m-label">Total regressions</div><div class="m-value">${totalReg}</div><div class="m-sub">${pRows.length} weeks</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;font-family:'IBM Plex Mono',monospace;">${name} · ${ROLE_SHORT[role]} · ${shortTeam}</div>
+    <div class="person-charts">
+      <div class="chart-card"><div class="chart-title">Hours Worked</div><div class="chart-wrap"><canvas id="pHoursChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Weekly Throughput</div><div class="chart-wrap"><canvas id="pThrChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">3-Mo Avg Productivity</div><div class="chart-wrap"><canvas id="pQtrChart"></canvas></div></div>
+    </div>
+  `;
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5568', font: { size: 10, family: "'IBM Plex Mono'" } }, beginAtZero: true }
+    },
+    elements: { line: { tension: 0.3 }, point: { radius: 3, hoverRadius: 5 } }
+  };
+
+  function lineDataset(data, col) {
+    return { label: '', data, borderColor: col, backgroundColor: col+'22', fill: true, borderWidth: 2 };
+  }
+
+  personCharts.hours = new Chart(document.getElementById('pHoursChart'), {
+    type: 'line',
+    data: { labels, datasets: [lineDataset(pRows.map(r=>r.hours), color)] },
+    options: baseOpts
+  });
+  personCharts.thr = new Chart(document.getElementById('pThrChart'), {
+    type: 'line',
+    data: { labels, datasets: [lineDataset(pRows.map(r=>r.throughput), '#10b981')] },
+    options: baseOpts
+  });
+  personCharts.qtr = new Chart(document.getElementById('pQtrChart'), {
+    type: 'line',
+    data: { labels, datasets: [lineDataset(pRows.map(r=>r.qtr), '#f59e0b')] },
+    options: baseOpts
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if (tab==='trends') renderTrends();
+  if (tab==='person') renderPerson();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════
+initUI();
+</script>
+</body>
+</html>
