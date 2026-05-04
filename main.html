@@ -356,6 +356,76 @@
 
   .tab-content { display: none; }
   .tab-content.active { display: block; }
+
+  /* ── TEAM AVERAGES ── */
+  .avgs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 900px) { .avgs-grid { grid-template-columns: 1fr; } }
+  .avgs-table-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .avgs-table-card.full { grid-column: 1 / -1; }
+  .avgs-group-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .avgs-group-title .color-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .avgs-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .avgs-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text2);
+    text-align: right;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .avgs-table th:first-child { text-align: left; }
+  .avgs-table td {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-align: right;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(46,53,69,0.4);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .avgs-table td:first-child { text-align: left; color: var(--text2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .avgs-table tr:last-child td { border-bottom: none; }
+  .avgs-table .cur-week { color: var(--accent); font-weight: 600; }
+  .avgs-table .delta-up { color: var(--success); }
+  .avgs-table .delta-dn { color: var(--danger); }
+  .avgs-table .delta-flat { color: var(--text3); }
+  .avgs-table tfoot td {
+    font-weight: 600;
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    background: rgba(255,255,255,0.02);
+    font-size: 11px;
+  }
+  .avgs-table tfoot td:first-child { color: var(--text2); }
+  .week-col-header { text-align: right; }
   
   .pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
   .pill {
@@ -408,6 +478,7 @@
 <!-- TABS -->
 <div class="tabs">
   <div class="tab active" data-tab="summary" onclick="switchTab('summary')">Summary</div>
+  <div class="tab" data-tab="avgs" onclick="switchTab('avgs')">Team Averages</div>
   <div class="tab" data-tab="trends" onclick="switchTab('trends')">Team Trends</div>
   <div class="tab" data-tab="person" onclick="switchTab('person')">Individual</div>
 </div>
@@ -432,6 +503,29 @@
       </div>
     </div>
     <div id="summaryContent"></div>
+  </div>
+
+  <!-- ── TEAM AVERAGES TAB ── -->
+  <div class="tab-content" id="tab-avgs">
+    <div class="filters">
+      <span class="filter-label">Group by:</span>
+      <select id="avgsGroupBy" onchange="renderAvgs()">
+        <option value="team">Team</option>
+        <option value="role">Role</option>
+        <option value="both">Team + Role</option>
+      </select>
+      <span class="filter-label" style="margin-left:8px;">Role:</span>
+      <select id="avgsRoleFilter" onchange="renderAvgs()">
+        <option value="">All roles</option>
+        <option value="Business Analyst">BA</option>
+        <option value="Configuration Specialist">CS</option>
+        <option value="Quality Assurance Specialist">QA</option>
+      </select>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn" onclick="exportAvgsExcel()">Export to Excel</button>
+      </div>
+    </div>
+    <div id="avgsContent"></div>
   </div>
 
   <!-- ── TRENDS TAB ── -->
@@ -994,6 +1088,232 @@ function renderPerson() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// TEAM AVERAGES TAB
+// ══════════════════════════════════════════════════════════════════
+let avgsCharts = {};
+
+function destroyAvgsCharts() {
+  Object.values(avgsCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  avgsCharts = {};
+}
+
+function computeGroupAvgs(rows, groupKey, last4weeks) {
+  // Returns array of { label, color, weeks: [{week, avgHours, avgThr, avgQtr, count}] }
+  const groups = {};
+  rows.forEach(r => {
+    if (!last4weeks.includes(r.weekStart)) return;
+    const key = groupKey(r);
+    if (!groups[key]) groups[key] = { label: key, rows: [] };
+    groups[key].rows.push(r);
+  });
+
+  return Object.values(groups).map(g => {
+    const weekData = last4weeks.map(w => {
+      const wr = g.rows.filter(r => r.weekStart === w && r.hours > 0);
+      const fullWr = wr.filter(r => r.hours > 5);
+      if (!wr.length) return { week: w, avgHours: null, avgThr: null, avgQtr: null, count: 0 };
+      const count = wr.length;
+      const avgHours = wr.reduce((s,r)=>s+r.hours,0)/count;
+      const avgThr = fullWr.length ? fullWr.reduce((s,r)=>s+r.throughput,0)/fullWr.length : null;
+      const avgQtr = fullWr.length ? fullWr.reduce((s,r)=>s+r.qtr,0)/fullWr.length : null;
+      return { week: w, avgHours, avgThr, avgQtr, count };
+    });
+    return { label: g.label, weekData };
+  });
+}
+
+function renderAvgs() {
+  destroyAvgsCharts();
+  const rows = getRows();
+  if (!rows.length) {
+    document.getElementById('avgsContent').innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><h3>No data yet</h3><p>Paste your morning data to see team averages.</p></div>`;
+    return;
+  }
+
+  const groupBy = document.getElementById('avgsGroupBy').value;
+  const roleF   = document.getElementById('avgsRoleFilter').value;
+
+  const filtered = rows.filter(r => !roleF || r.role === roleF);
+
+  // Get last 4 weeks that have data
+  const allWeeks = [...new Set(filtered.map(r => r.weekStart))].sort();
+  const last4 = allWeeks.slice(-4);
+  const weekLabels = last4.map(w => 'Wk ' + fmtWeek(w));
+  const currentWeek = last4[last4.length - 1];
+
+  // Group key function
+  let groupKeyFn;
+  if (groupBy === 'team')    groupKeyFn = r => r.team;
+  else if (groupBy === 'role') groupKeyFn = r => r.role;
+  else                        groupKeyFn = r => `${r.team} · ${ROLE_SHORT[r.role]}`;
+
+  const groups = computeGroupAvgs(filtered, groupKeyFn, last4);
+  groups.sort((a,b) => a.label.localeCompare(b.label));
+
+  // Chart colors per group
+  const palette = ['#5b9bff','#34d399','#fbbf24','#f472b6','#a78bfa','#06b6d4','#f97316','#84cc16'];
+  groups.forEach((g,i) => g.color = palette[i % palette.length]);
+
+  // Build HTML: cards with mini-tables + one combined chart section
+  let html = `<div class="avgs-grid">`;
+
+  groups.forEach((g, gi) => {
+    const color = g.color;
+    const shortLabel = g.label.replace('Business Analysis - ','').replace('Configuration - ','').replace('Quality Assurance - ','');
+
+    // Delta from oldest to newest available week
+    const validWks = g.weekData.filter(w => w.avgThr !== null);
+    const firstThr = validWks.length ? validWks[0].avgThr : null;
+    const lastThr  = validWks.length ? validWks[validWks.length-1].avgThr : null;
+    const delta = (firstThr !== null && lastThr !== null && validWks.length > 1) ? lastThr - firstThr : null;
+    const deltaHtml = delta === null ? '' :
+      delta > 0.5 ? `<span class="delta-up" style="font-size:10px;margin-left:6px;">▲${delta.toFixed(1)}</span>` :
+      delta < -0.5 ? `<span class="delta-dn" style="font-size:10px;margin-left:6px;">▼${Math.abs(delta).toFixed(1)}</span>` :
+      `<span class="delta-flat" style="font-size:10px;margin-left:6px;">—</span>`;
+
+    html += `<div class="avgs-table-card">
+      <div class="avgs-group-title">
+        <div class="color-dot" style="background:${color}"></div>
+        ${shortLabel} ${deltaHtml}
+      </div>
+      <table class="avgs-table">
+        <thead><tr>
+          <th>Metric</th>
+          ${last4.map((w,i) => `<th class="week-col-header${i===last4.length-1?' cur-week':''}">${weekLabels[i]}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>Avg Hours</td>
+            ${g.weekData.map((w,i) => `<td class="${i===last4.length-1?'cur-week':''}">${w.avgHours!==null?w.avgHours.toFixed(1):'—'}</td>`).join('')}
+          </tr>
+          <tr>
+            <td>Avg Throughput</td>
+            ${g.weekData.map((w,i) => `<td class="${i===last4.length-1?'cur-week':''}">${w.avgThr!==null?w.avgThr.toFixed(1):'—'}</td>`).join('')}
+          </tr>
+          <tr>
+            <td>Avg 3-Mo Prod</td>
+            ${g.weekData.map((w,i) => `<td class="${i===last4.length-1?'cur-week':''}">${w.avgQtr!==null?w.avgQtr.toFixed(1):'—'}</td>`).join('')}
+          </tr>
+          <tr>
+            <td>Headcount</td>
+            ${g.weekData.map((w,i) => `<td class="${i===last4.length-1?'cur-week':''}" style="color:var(--text3)">${w.count||'—'}</td>`).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  });
+
+  // Charts section — full-width
+  html += `</div>
+  <div class="charts-grid" style="margin-top:4px;">
+    <div class="chart-card wide">
+      <div class="chart-title">Avg Weekly Throughput — last 4 weeks by group</div>
+      <div class="chart-wrap" style="height:240px;"><canvas id="avgsChart"></canvas></div>
+    </div>
+    <div class="chart-card wide">
+      <div class="chart-title">Avg 3-Mo Productivity — last 4 weeks by group</div>
+      <div class="chart-wrap" style="height:240px;"><canvas id="avgsQtrChart"></canvas></div>
+    </div>
+  </div>`;
+
+  document.getElementById('avgsContent').innerHTML = html;
+
+  // Build chart datasets
+  const chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { color: '#b0bcd0', boxWidth: 10, font: { size: 10, family: "'IBM Plex Mono'" }, padding: 8 } } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7a94', font: { size: 10, family: "'IBM Plex Mono'" } }, beginAtZero: true }
+    }
+  };
+
+  const shortLabel = g => g.label.replace('Business Analysis - ','').replace('Configuration - ','').replace('Quality Assurance - ','');
+
+  avgsCharts.thr = new Chart(document.getElementById('avgsChart'), {
+    type: 'bar',
+    data: {
+      labels: weekLabels,
+      datasets: groups.map(g => ({
+        label: shortLabel(g),
+        data: g.weekData.map(w => w.avgThr),
+        backgroundColor: g.color + 'aa',
+        borderColor: g.color,
+        borderWidth: 1,
+        borderRadius: 3
+      }))
+    },
+    options: chartOpts
+  });
+
+  avgsCharts.qtr = new Chart(document.getElementById('avgsQtrChart'), {
+    type: 'bar',
+    data: {
+      labels: weekLabels,
+      datasets: groups.map(g => ({
+        label: shortLabel(g),
+        data: g.weekData.map(w => w.avgQtr),
+        backgroundColor: g.color + 'aa',
+        borderColor: g.color,
+        borderWidth: 1,
+        borderRadius: 3
+      }))
+    },
+    options: chartOpts
+  });
+}
+
+function exportAvgsExcel() {
+  const rows = getRows();
+  if (!rows.length) return;
+
+  const groupBy  = document.getElementById('avgsGroupBy').value;
+  const roleF    = document.getElementById('avgsRoleFilter').value;
+  const filtered = rows.filter(r => !roleF || r.role === roleF);
+
+  const allWeeks = [...new Set(filtered.map(r => r.weekStart))].sort();
+  const last4 = allWeeks.slice(-4);
+  const weekLabels = last4.map(w => 'Wk ' + fmtWeek(w));
+
+  let groupKeyFn;
+  if (groupBy === 'team')    groupKeyFn = r => r.team;
+  else if (groupBy === 'role') groupKeyFn = r => r.role;
+  else                        groupKeyFn = r => `${r.team} · ${ROLE_SHORT[r.role]}`;
+
+  const groups = computeGroupAvgs(filtered, groupKeyFn, last4);
+  groups.sort((a,b) => a.label.localeCompare(b.label));
+
+  const headerRow = ['Group', 'Metric', ...weekLabels].join('\t');
+  const dataRows = [];
+
+  groups.forEach(g => {
+    const label = g.label.replace('Business Analysis - ','').replace('Configuration - ','').replace('Quality Assurance - ','');
+    const metrics = [
+      { name: 'Avg Hours',      key: 'avgHours' },
+      { name: 'Avg Throughput', key: 'avgThr' },
+      { name: 'Avg 3-Mo Prod',  key: 'avgQtr' },
+      { name: 'Headcount',      key: 'count' },
+    ];
+    metrics.forEach(m => {
+      const vals = g.weekData.map(w => w[m.key] !== null ? w[m.key].toFixed !== undefined ? w[m.key].toFixed(1) : w[m.key] : '');
+      dataRows.push([label, m.name, ...vals].join('\t'));
+    });
+    dataRows.push(''); // blank spacer row between groups
+  });
+
+  const tsv = [headerRow, ...dataRows].join('\n');
+  navigator.clipboard.writeText(tsv).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = tsv; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  });
+
+  const btn = event.target;
+  const orig = btn.textContent; btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+
+// ══════════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════════
 function switchTab(tab) {
@@ -1002,6 +1322,7 @@ function switchTab(tab) {
   document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
   document.getElementById(`tab-${tab}`).classList.add('active');
   if (tab==='trends') renderTrends();
+  if (tab==='avgs') renderAvgs();
   if (tab==='person') renderPerson();
 }
 
