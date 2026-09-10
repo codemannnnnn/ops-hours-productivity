@@ -1472,8 +1472,8 @@ function printTrends() {
   }
 
   .charts-col { display: flex; flex-direction: column; gap: 18px; }
-  .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; }
-  .chart-container { position: relative; height: 200px; }
+  .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; }
+  .chart-block img { width: 100%; display: block; }
 
   .print-btn-row {
     position: fixed; bottom: 16px; right: 16px;
@@ -1542,10 +1542,56 @@ const baseOpts = (title) => ({
   }
 });
 
+// Render a chart to a high-res image and return a data URL
+function renderChartImage(datasets, labels, title) {
+  const SCALE = 4;
+  const W = 860, H = 220;
+  const canvas = document.createElement('canvas');
+  canvas.width  = W * SCALE;
+  canvas.height = H * SCALE;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+
+  // White background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      ...baseOpts(title),
+      responsive: false,
+      animation: false,
+      devicePixelRatio: 1,
+    }
+  });
+
+  const url = canvas.toDataURL('image/png');
+  chart.destroy();
+  return url;
+}
+
+function recolor(datasets) {
+  let pi = 0;
+  return datasets.map(ds => {
+    if (ds.label === 'Team Avg') return { ...ds, borderColor: '#94a3b8', borderDash: [5,3], backgroundColor: 'transparent' };
+    const c = palette[pi++ % palette.length];
+    return { ...ds, borderColor: c, backgroundColor: 'transparent' };
+  });
+}
+
 const pages = document.getElementById('pages');
 
 teamBlocks.forEach((tb, ti) => {
   const color = TEAM_COLORS_PRINT[tb.team] || '#1d4ed8';
+
+  const imgH = renderChartImage(recolor(tb.hours),      weekLabels, 'Hours Worked');
+  const imgT = renderChartImage(recolor(tb.throughput), weekLabels, 'Weekly Throughput (TotalEarnedIncentiveRealtime)');
+  const imgQ = renderChartImage(recolor(tb.qtr),        weekLabels, '3-Month Avg Productivity (AvgEarnedIncentiveThreeMonth)');
+
   const div = document.createElement('div');
   div.className = 'team-page';
   div.innerHTML = \`
@@ -1554,38 +1600,12 @@ teamBlocks.forEach((tb, ti) => {
       \${tb.shortName}
     </div>
     <div class="charts-col">
-      <div class="chart-block"><div class="chart-container"><canvas id="h_\${ti}"></canvas></div></div>
-      <div class="chart-block"><div class="chart-container"><canvas id="t_\${ti}"></canvas></div></div>
-      <div class="chart-block"><div class="chart-container"><canvas id="q_\${ti}"></canvas></div></div>
+      <div class="chart-block"><img src="\${imgH}" style="width:100%;display:block;"></div>
+      <div class="chart-block"><img src="\${imgT}" style="width:100%;display:block;"></div>
+      <div class="chart-block"><img src="\${imgQ}" style="width:100%;display:block;"></div>
     </div>
   \`;
   pages.appendChild(div);
-
-  // Re-color datasets with print palette
-  function recolor(datasets) {
-    let pi = 0;
-    return datasets.map(ds => {
-      if (ds.label === 'Team Avg') return { ...ds, borderColor: '#94a3b8', borderDash: [5,3] };
-      const c = palette[pi++ % palette.length];
-      return { ...ds, borderColor: c, backgroundColor: 'transparent' };
-    });
-  }
-
-  new Chart(document.getElementById('h_'+ti), {
-    type: 'line',
-    data: { labels: weekLabels, datasets: recolor(tb.hours) },
-    options: baseOpts('Hours Worked')
-  });
-  new Chart(document.getElementById('t_'+ti), {
-    type: 'line',
-    data: { labels: weekLabels, datasets: recolor(tb.throughput) },
-    options: baseOpts('Weekly Throughput (TotalEarnedIncentiveRealtime)')
-  });
-  new Chart(document.getElementById('q_'+ti), {
-    type: 'line',
-    data: { labels: weekLabels, datasets: recolor(tb.qtr) },
-    options: baseOpts('3-Month Avg Productivity (AvgEarnedIncentiveThreeMonth)')
-  });
 });
 <\/script>
 </body>
